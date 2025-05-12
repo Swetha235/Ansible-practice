@@ -1,0 +1,38 @@
+---
+- name: Install git, httpd, start htppd service, display the service status and deploy the code
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  tasks:
+   - name: Install Git
+     yum:
+       name: git
+       state: present
+
+   - name: Install httpd
+     yum:
+       name: httpd
+       state: present
+
+   - name: start httpd service
+     service:
+       name: httpd
+       state: started
+     tags: htppd_service
+
+   - name: httpd service status
+     shell: service httpd start
+     tags: httpd_service
+     register: service_op
+
+   - name: display the service status
+     debug:
+       var: service_op
+     tags: httpd_service
+
+   - name: deploy the code
+     copy:
+       src: /opt/index.html
+       dest: /var/www/html/index.html
+     tags: deploy_code
