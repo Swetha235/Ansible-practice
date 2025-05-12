@@ -1,0 +1,49 @@
+---
+- name: Install Jenkins application
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  tasks:
+   - name: update all packages
+     yum:
+       name: "*"
+       state: latest
+
+   - name: Add Jenkins repo
+     get_url:
+       url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+       dest: /etc/yum.repos.d/jenkins.repo
+
+   - name: Jenkins key file import
+     rpm_key:
+       key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+       state: present
+
+   - name: upgrade all packages
+     dnf:
+       name: java-17-amazon-corretto
+       state: present
+
+   - name: Install Jenkins
+     yum:
+       name: jenkins
+       state: present
+
+   - name: enable jenkins service to start at boot level
+     service:
+       name: jenkins
+       enabled: yes
+
+   - name: start jenkins service
+     service:
+       name: jenkins
+       state: started
+
+   - name: get jenkins intial admin password
+     shell: cat /var/lib/jenkins/secrets/initialAdminPassword
+     register: jenkins_password
+
+   - name: display the jenkins password
+     debug:
+       var: jenkins_password
