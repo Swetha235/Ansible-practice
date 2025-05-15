@@ -1,0 +1,309 @@
+Install Packages and Deploy the code:
+####################################### (playbook1.yaml)
+---
+-  name: Install git,httpd, start httpd serverice and deploy the code
+   hosts: all
+   become: yes
+   tasks:
+    - name: Install git
+      yum: 
+        name: git
+        state: present
+    - name: Install httpd
+        yum:
+          name: httpd
+          state: present
+     - name: start httpd service
+       service:
+        name: httpd
+        state: started
+     - name: deploy the code
+       copy: 
+         src: /opt/index.html
+         dest: /var/www/html/index.html
+
+#######################################################
+Suppose I want to run the only one task instead of all tasks then i need to use '--tags' during run time by giving the tags in playbook
+
+ (playbook2.yaml)
+---
+-  name: Install git,httpd, start httpd serverice and deploy the code
+   hosts: all
+   become: yes
+   tasks:
+    - name: Install git
+      yum: 
+        name: git
+        state: present
+    - name: Install httpd
+        yum:
+          name: httpd
+          state: present
+     - name: start httpd service
+       service:
+        name: httpd
+        state: started
+     - name: deploy the code
+       copy: 
+         src: /opt/index.html
+         dest: /var/www/html/index.html
+       tags: deploy_code
+
+Run a playbook:(using tags)
+
+ansible -playbook -i /opt/inventory playbook1.yaml --tags deploy_code
+
+We have set of servers (seggregate the servers like [DBservers], [Appservers] in our inventory but we need to run the playbook only on app servers using --limit or in playbook we have to edit the 'hosts:Appservers'
+
+ansible-playbook -i /opt/inventory playbook1.yaml --limit Appservers
+
+####################################################################
+register in Ansible
+Actually, register is a keyword used in Ansible to capture the output of a task into a variable, which you can use later in the playbook.
+
+ (playbook3.yaml)
+---
+-  name: Install git,httpd, start httpd serverice and deploy the code
+   hosts: all
+   become: yes
+   tasks:
+    - name: Install git
+      yum: 
+        name: git
+        state: present
+    - name: Install httpd
+        yum:
+          name: httpd
+          state: present
+     - name: start httpd service
+       service:
+        name: httpd
+        state: started
+       tags: service_httpd
+     - name: httpd service status
+       shell: systemctl status httpd
+       register: service_output
+       tags: service_httpd
+     - name: display the service status
+       debug:
+       var: service_output
+       tags: service_httpd
+     - name: deploy the code
+       copy: 
+         src: /opt/index.html
+         dest: /var/www/html/index.html
+       tags: deploy_code
+
+Run a playbook:
+ansible-playbook -i /opt/inventory playbook3.yaml --tags service_httpd
+
+###############################################################
+Jenkins Playbook:(jenkins_playbook.yaml)
+
+sudo yum update –y
+sudo wget -O /etc/yum.repos.d/jenkins.repo \
+    https://pkg.jenkins.io/redhat-stable/jenkins.repo
+sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+sudo yum upgrade
+sudo yum install java-17-amazon-corretto -y
+sudo yum install jenkins -y
+sudo systemctl enable jenkins
+systemctl start jenkins
+systemctl status jenkins
+
+(jenkins_playbook.yaml)
+
+---
+- name: Install Jenkins application
+  hosts: all
+  become: yes
+  tasks:
+    - name: update all packages
+      yum:
+        name: "*"
+        state: latest
+- name: Add jenkins repo
+  get_url:
+    url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+    dest: /etc/yum.repos.d/jenkins.repo
+- name: import jenkins key
+  rpm_key:
+    key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+    state: present
+- name: upgrade all packages
+  yum:
+    name: "*"
+    state: latest
+- name: install java
+  dnf:
+    name: java-17-amazon-corretto
+    state: present
+- name: Install Jenkins
+  yum:
+    name: jenkins
+    state: present
+- name: jenkins service start and enabled
+  service:
+    name: jenkins
+    state: present
+    enabled: yes
+- name: jenkins service status
+  shell: systemctl status jenkins
+  register: service_status_op
+- name: display the service status
+  debug:
+    var: service_status_op
+- name: get the jenkins initialadminpassword
+  shell: cat /var/lib/jenkins/secrets/initialAdminPassword
+  register: password
+  tags: Jenkins_password
+- name: display the jenkins password
+  debug:
+    var: password
+  tags: Jenkins_password
+
+
+
+#########################################################
+Ansible template: Ansible template module is used to dynamically create or modify configuration files from a jinja2 template
+
+
+template_playbook.yaml
+---
+- name: Install git,httpd, start httpd serverice and deploy the code
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install git
+      yum: 
+        name: git
+        state: present
+    - name: Install httpd
+        yum:
+          name: httpd
+          state: present
+    - name: start httpd service
+       service:
+        name: httpd
+        state: started
+    - name: deploy the code
+       template: 
+         src: /opt/index.j2
+         dest: /var/www/html/index.html
+
+We have change the index.html to index.j2  and configuration variable is { { ansible_hostname } }
+
+####################################################################
+
+how to install multipackages at a time in 2 ways:
+
+1st way:
+
+---
+- name: Install multipackages
+  hosts:all
+  become: yes 
+  tasks:
+    - name: Install multiple packages
+      yum: name=git,httpd,java state=present
+
+=> Install all 3 packages in a single yum command
+=> faster,less verbose
+=> if one package fails, the entire task may fail
+
+2nd Way:
+
+---
+- name: install multiple packages using loop variable
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install multiple packages
+      yum:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - git
+        - httpd
+        - java
+      tags: multiple_packages
+
+##############################################################
+
+Ansible Handlers: used to run a task only when notified, usually after a change occurs
+
+---
+-  name: Install git,httpd, start httpd serverice and deploy the code
+   hosts: all
+   become: yes
+   tasks:
+    - name: Install httpd
+        yum:
+          name: httpd
+          state: present
+    - name: deploy the code
+       copy: 
+         src: /opt/index.html
+         dest: /var/www/html/index.html
+    
+       notify: restart the httpd service
+  handlers:
+    - name: restart the httpd service
+      service:
+        name: httpd
+        state: restrated
+
+###########################################################
+
+Variable in ansible: used to store values that can be reused across playbooks, tasks
+Reusability, clean code,flexibility, mnaintainability
+
+ variable_playbook.yaml::::
+
+- name: Install Jenkins application
+  hosts: all
+  become: yes
+  vars:
+    jenkins_repo: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+    jenkins_key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+  package_name: jenkins
+  tasks:
+    - name: update all packages
+      yum:
+        name: "*"
+        state: present
+- name: Add jenkins repo
+  get_url:
+    src: "{{ jenkins_repo }}"
+    dest: /etc/yum.repos.d/jenkins.repo
+- name: import jenkins key
+  rpm_key:
+    key: "{{ jenkins_key }}" 
+    state: present
+- name: upgrade all packages
+  yum:
+    name: "*"
+    state: present
+- name: install java
+  dnf:
+    name: java-17-amazon-corretto -y
+    state: present
+- name: Install Jenkins
+  yum:
+    name: "{{ jenkins }}"
+    state: present
+- name: jenkins service start and enabled
+  service:
+    name: jenkins
+    state: present
+    enabled: yes
+- name: jenkins service status
+  shell: systemctl status jenkins
+  register: service_status_op
+- name: display the service status
+  debug:
+    var: service_status_op
+
+how to run a playbook:
+
+ansible-playbook -i opt/inventory variable_playbook.yaml
